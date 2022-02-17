@@ -1,32 +1,50 @@
 # datahem.astro
-GCP Astro data integration using FastApi on cloud run and pubsub
+GCP workflows runner that enable re-runs and backfills (missing feature in workflows)
+
+Make sure to set envar environment = production if you want to use gcp logging.
+
+There are two important endpoints:
+
+@app.post("/v1/projects/{project}/locations/{location}/workflows/{workflow}/executions")
+Accepts a timezone query-parameter to enable generation of timestamps with timezone offsets.
+Adds a scheduleTime attribute in the body that is sent to the workflow for execution, this facilitate re-runs with timestamps that are immutable.
+
+@app.post("/range")
+Accepts a body with start and stop datetimes and a step defined as a cron schedule. Returns a list of datetimes.
+
+```
+   start: datetime.datetime
+   stop: datetime.datetime
+   step: str # cron schedule
+
+   {
+      "start":"2022-02-15T00:00:00Z", 
+      "stop":"2022-02-18T00:00:00Z", 
+      "step":"0 * * * *"
+   }
+```
+
 
 gcloud auth application-default login
 gcloud beta code dev --dockerfile=./Dockerfile --application-default-credential
 
-Build locally (on Mac m1)
 ```sh
-docker build -t my-app --platform=linux/amd64 .
-```
+curl -X POST <service_url>/v1/projects/<my_project>/locations/europe-west4/workflows/workflow-1/executions?timezone=Europe/Stockholm \
+   -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+   -H 'Content-Type: application/json' \
+   -H 'X-CloudScheduler-ScheduleTime: 2019-10-12T07:20:50.52Z' \
+   -d '{"firstName":"first"}'
 
-Run locally (make sure you have credentials file in the path)
-```sh
-GOOGLE_APPLICATION_CREDENTIALS=/tmp/keys/gcp_credentials.json
-docker run -d \                                    
--p 8080:8080 \
--e GOOGLE_APPLICATION_CREDENTIALS=/tmp/keys/gcp_credentials.json \
--v $GOOGLE_APPLICATION_CREDENTIALS:/tmp/keys/gcp_credentials.json:ro \
--e DRIVER='DRIVER={ODBC Driver 17 for SQL Server};SERVER=<host>;PORT=1443;DATABASE=veddesta;UID=<user>;PWD=<password>;ApplicationIntent=ReadOnly' \
-my-app
+
+=> {"firstName":"first", "scheduleTime":"2019-10-12T08:20:50.52+01:00"}
 ```
 
 ```sh
-curl -X POST http://0.0.0.0:8081/v1/projects/project/locations/location/workflows/workflow/executions \
+curl -X POST <service_url>/range \
+   -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
    -H 'Content-Type: application/json' \
    -H 'X-CloudScheduler-ScheduleTime: 2019-10-12T07:20:50.52Z' \
-   -d '{"query":"select top 60000 10 as storeid, L62T1.partno from malmo.dbo.L62T1;", "topic_id":"fastapi-astro", "project_id":"mathem-ml-datahem-test"}'
+   -d '{"start":"2022-02-15T00:00:00Z", "stop":"2022-02-18T00:00:00Z", "step":"0 1 * * *"}'
+
+=> ["2022-02-15T01:00:00+00:00","2022-02-16T01:00:00+00:00","2022-02-17T01:00:00+00:00"]
 ```
-curl -X POST http://0.0.0.0:8081/v1/projects/mathem-ml-datahem-test/locations/europe-west4/workflows/workflow-1/executions \
-   -H 'Content-Type: application/json' \
-   -H 'X-CloudScheduler-ScheduleTime: 2019-10-12T07:20:50.52Z' \
-   -d '{"query":"select top 60000 10 as storeid, L62T1.partno from malmo.dbo.L62T1;", "topic_id":"fastapi-astro", "project_id":"mathem-ml-datahem-test", "firstName":"first"}'

@@ -99,7 +99,6 @@ async def headers(project, location, workflow, request: Request,
 @app.post("/range")
 async def return_range(range: Range):
     try:
-        print('ok')
         response = []
         for dt in croniter_range(range.start, range.stop, range.step):
             response.append(dt)
