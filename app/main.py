@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from croniter import croniter_range
 import json
 from fastapi import FastAPI, HTTPException, Header, Request
-from typing import Optional
+from typing import List, Optional
 from fastapi.logger import logger
 from pydantic import BaseSettings
 from cloud_logging.middleware import LoggingMiddleware
@@ -30,9 +30,6 @@ class Range(BaseModel):
 settings = Settings()
 app = FastAPI()
 
-publish_futures = []
-DRIVER = os.environ.get('DRIVER')
-
 if settings.environment == 'production':
     setup_logging()
     app.add_middleware(LoggingMiddleware)
@@ -55,11 +52,8 @@ async def headers(project, location, workflow, request: Request,
                   timezone: str = "UTC",
                   x_cloudScheduler_scheduleTime: Optional[str] = Header(None)):
     try:
-        _date_obj = pendulum.parse(x_cloudScheduler_scheduleTime).in_timezone(timezone)
+        _date_obj = pendulum.parse(x_cloudScheduler_scheduleTime).in_timezone(timezone).isoformat()
 
-        body = await request.json()
-        # body['scheduleTime']=x_cloudScheduler_scheduleTime
-        body['scheduleTime'] = _date_obj.isoformat()
         # Set up API clients.
         execution_client = executions_v1.ExecutionsClient()
         workflows_client = workflows_v1.WorkflowsClient()
@@ -67,26 +61,30 @@ async def headers(project, location, workflow, request: Request,
         # Construct the fully qualified location path.
         parent = workflows_client.workflow_path(project, location, workflow)
 
-        # Execute the workflow.
-        execution = execution_client.create_execution(
-            request={
-                "parent": parent,
-                "execution": {
-                    "argument": json.dumps(body, default=data_type_handler)
+        body = await request.json()
+        response = []
+        for row in body:
+            row['scheduleTime'] = _date_obj        
+            # Execute the workflow.
+            execution = execution_client.create_execution(
+                request={
+                    "parent": parent,
+                    "execution": {
+                        "argument": json.dumps(row, default=data_type_handler)
+                    }
                 }
-            }
-        )
-        # logger.info(f"Created execution: {execution.name}")
-        response = {
-            "X-CloudScheduler-ScheduleTime": x_cloudScheduler_scheduleTime,
-            "project": project,
-            "location": location,
-            "workflow": workflow,
-            "execution": {
-                "name": execution.name,
-                "argument": execution.argument
-            }
-        }
+            )
+            response.append({
+                "X-CloudScheduler-ScheduleTime": x_cloudScheduler_scheduleTime,
+                "project": project,
+                "location": location,
+                "workflow": workflow,
+                "execution": {
+                    "name": execution.name,
+                    "argument": execution.argument
+                }
+            })
+        
         logger.info(response)
         return response
     except Exception as e:

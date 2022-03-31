@@ -7,7 +7,7 @@ There are two important endpoints:
 
 @app.post("/v1/projects/{project}/locations/{location}/workflows/{workflow}/executions")
 Accepts a timezone query-parameter to enable generation of timestamps with timezone offsets.
-Adds a scheduleTime attribute in the body that is sent to the workflow for execution, this facilitate re-runs with timestamps that are immutable.
+Adds a scheduleTime attribute in the body (array) that is sent to the workflow for execution, this facilitate re-runs with timestamps that are immutable.
 
 @app.post("/range")
 Accepts a body with start and stop datetimes and a step defined as a cron schedule. Returns a list of datetimes.
@@ -33,10 +33,11 @@ curl -X POST <service_url>/v1/projects/<my_project>/locations/europe-west4/workf
    -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
    -H 'Content-Type: application/json' \
    -H 'X-CloudScheduler-ScheduleTime: 2019-10-12T07:20:50.52Z' \
-   -d '{"firstName":"first"}'
+   -d '[{"firstName":"first"}, {"firstName":"last"}]'
 
-
+# Results in two calls to workflow with the input:
 => {"firstName":"first", "scheduleTime":"2019-10-12T08:20:50.52+01:00"}
+=> {"firstName":"last", "scheduleTime":"2019-10-12T08:20:50.52+01:00"}
 ```
 
 ```sh
