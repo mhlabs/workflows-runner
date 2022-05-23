@@ -1,8 +1,9 @@
-# datahem.astro
+# workflows-runner
 GCP workflows runner that enable re-runs and backfills (missing feature in workflows)
 
 Make sure to set envar environment = production if you want to use gcp logging.
 
+## endpoints
 There are two important endpoints:
 
 @app.post("/v1/projects/{project}/locations/{location}/workflows/{workflow}/executions")
